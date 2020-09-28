@@ -1,7 +1,7 @@
 package blep;
 
-import blep.Tryable.TryOnce;
 import io.vavr.concurrent.Future;
+import io.vavr.concurrent.Promise;
 import org.junit.Test;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,7 +28,7 @@ public class SideEffectProcessorTest {
                 (k,t,v) -> true
         );
 
-        processor.process(1l, TryOnce.build("yes"))
+        processor.process(1l, Retryable.init("yes", 1))
                 .get();
 
         assertThat(
@@ -53,7 +53,7 @@ public class SideEffectProcessorTest {
                 (k,t,v) -> false
         );
 
-        processor.process(1l, TryOnce.build("yes"))
+        processor.process(1l, Retryable.init("yes", 1))
                 .get();
 
         assertThat(
@@ -79,7 +79,7 @@ public class SideEffectProcessorTest {
                 (k,t,v) -> false
         );
 
-        processor.process(1L, TryOnce.build("yes").failed())
+        processor.process(1L, Retryable.init("yes", 1).failed())
                 .get();
 
         assertThat(
@@ -87,4 +87,38 @@ public class SideEffectProcessorTest {
         ).isTrue();
     }
 
+    @Test
+    public void should_manage_exceptions() {
+        AtomicBoolean failureNotified = new AtomicBoolean(false);
+        Promise<Object> promise = Promise.make();
+
+
+        SideEffectProcessor<Long, String, Integer> processor = new SideEffectProcessor<>(
+                s -> Future.of(() -> {
+                    throw new RuntimeException("bang!");
+                }),
+                (id, success, returnedValue) -> {
+                    throw new RuntimeException("should not happen");
+                },
+                (k, t) -> {
+                    Future<Object> future = Future.successful(failureNotified.getAndSet(true));
+                    future.await();
+                    promise.success("ok");
+                    return future;
+                },
+                (k, t) -> {
+                    throw new RuntimeException("should not happen");
+                },
+                (k,t,v) -> false
+        );
+
+        processor.process(1L, Retryable.init("yes", 1));
+
+        promise.future().await(); //Otherwise the test may end before the flag has been set.
+
+        assertThat(
+                failureNotified
+        ).isTrue();
+
+    }
 }

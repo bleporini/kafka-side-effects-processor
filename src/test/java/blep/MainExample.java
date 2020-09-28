@@ -1,12 +1,8 @@
 package blep;
 
-import blep.Tryable.Retryable;
-import blep.Tryable.TryOnce;
 import blep.WithKafkaConfiguration.WithLocalUnsecureKafka;
 import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.vavr.concurrent.Future;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -16,8 +12,6 @@ import org.apache.kafka.common.serialization.*;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static blep.Tryable.Status.TO_TRY;
 
 public class MainExample implements WithLocalUnsecureKafka, WithRuntimeExceptionWrapper {
 
@@ -29,21 +23,21 @@ public class MainExample implements WithLocalUnsecureKafka, WithRuntimeException
     private Properties conf = configuration();
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    public static class TryOnceDeserializer implements Deserializer<Tryable<String>>, WithRuntimeExceptionWrapper{
+    public static class StringRetryableDeserializer implements Deserializer<Retryable<String>>, WithRuntimeExceptionWrapper{
 
         @Override
-        public Tryable<String> deserialize(String topic, byte[] data) {
-            JavaType type = mapper.getTypeFactory().constructParametricType(Tryable.class, String.class);
+        public Retryable<String> deserialize(String topic, byte[] data) {
+            JavaType type = mapper.getTypeFactory().constructParametricType(Retryable.class, String.class);
             return toUnchecked(() ->
                     mapper.readValue(data, type)
             );
         }
     }
 
-    public static class TryOnceSerializer implements Serializer<Tryable<String>>, WithRuntimeExceptionWrapper{
+    public static class StringRetryableSerializer implements Serializer<Retryable<String>>, WithRuntimeExceptionWrapper{
 
         @Override
-        public byte[] serialize(String topic, Tryable<String> data) {
+        public byte[] serialize(String topic, Retryable<String> data) {
             return toUnchecked(() ->
                     mapper.writeValueAsBytes(data)
             );
@@ -55,20 +49,20 @@ public class MainExample implements WithLocalUnsecureKafka, WithRuntimeException
     public MainExample() throws ExecutionException, InterruptedException {
         KafkaProducer<String, byte[]> producer = new KafkaProducer<>(conf, new StringSerializer(),new ByteArraySerializer());
 
-        Deserializer<Tryable<String>>tryableDeserializer = new TryOnceDeserializer() ;
+        Deserializer<Retryable<String>>retryableDeserializer = new StringRetryableDeserializer() ;
 
-        var tryOnceSerializer = new TryOnceSerializer() ;
+        var tryOnceSerializer = new StringRetryableSerializer() ;
         var consumer = new KafkaConsumer<>(
                 conf,
                 new StringDeserializer(),
-                tryableDeserializer
+                retryableDeserializer
         );
 
         producer.send(
                 new ProducerRecord<>(
                         "requests",
                         "key",
-                        tryOnceSerializer.serialize("requests", new TryOnce<>("test", true, TO_TRY))
+                        tryOnceSerializer.serialize("requests", Retryable.init("test", 1))
 //                        tryOnceSerializer.serialize("requests",Retryable.init("Test", 3))
                 )
         ).get();

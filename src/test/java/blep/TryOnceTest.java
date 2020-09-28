@@ -1,6 +1,5 @@
 package blep;
 
-import blep.Tryable.TryOnce;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -10,14 +9,14 @@ public class TryOnceTest {
     @Test
     public void should_try() {
         assertThat(
-                TryOnce.build("test").canTry()
+                Retryable.init("test", 1).canTry()
         ).isTrue();
     }
 
     @Test
     public void should_not_retry() {
         assertThat(
-                TryOnce.build("test")
+                Retryable.init("test", 1)
                         .failed()
                         .canTry()
         ).isFalse();

@@ -14,14 +14,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.StreamSupport;
 
-import static blep.Tryable.Status.TO_TRY;
+import static blep.Retryable.Status.TO_TRY;
 import static io.vavr.concurrent.Future.fromJavaFuture;
 
 public class KafkaSideEffectProcessor<K,P,V> {
 
-    private final KafkaConsumer<K, Tryable<P>> requestConsumer;
+    private final KafkaConsumer<K, Retryable<P>> requestConsumer;
     private final KafkaProducer<K, byte[]> responseProducer;
-    private final Serializer<Tryable<P>> payloadSerializer;
+    private final Serializer<Retryable<P>> payloadSerializer;
     private final Serializer<V> returnedValueSerializer;
     private final ReturnedValueChecker<K,P,V> valueChecker;
     private final AsyncPayloadProcessor<P, V> asyncProcessor;
@@ -33,9 +33,9 @@ public class KafkaSideEffectProcessor<K,P,V> {
 
 
     public KafkaSideEffectProcessor(
-            KafkaConsumer<K, Tryable<P>> requestConsumer,
+            KafkaConsumer<K, Retryable<P>> requestConsumer,
             KafkaProducer<K, byte[]> responseProducer,
-            Serializer<Tryable<P>> payloadSerializer,
+            Serializer<Retryable<P>> payloadSerializer,
             Serializer<V> returnedValueSerializer,
             ReturnedValueChecker<K,P,V> valueChecker,
             AsyncPayloadProcessor<P, V> asyncProcessor,
@@ -66,7 +66,7 @@ public class KafkaSideEffectProcessor<K,P,V> {
         requestConsumer.subscribe(List.of(requestTopicName));
 
         while (true) {
-            ConsumerRecords<K, Tryable<P>> requests = requestConsumer.poll(Duration.ofMillis(100));
+            ConsumerRecords<K, Retryable<P>> requests = requestConsumer.poll(Duration.ofMillis(100));
 
             StreamSupport.stream(requests.spliterator(), false)
                     .filter(r ->
@@ -78,33 +78,33 @@ public class KafkaSideEffectProcessor<K,P,V> {
         }
     }
 
-    private Future<Object> sendReject(K k, Tryable<P> pTryable) {
+    private Future<Object> sendReject(K k, Retryable<P> pRetryable) {
         return fromJavaFuture(
                 responseProducer.send(
                         new ProducerRecord<>(
                                 rejectionTopicName,
                                 k,
-                                payloadSerializer.serialize(rejectionTopicName, pTryable)
+                                payloadSerializer.serialize(rejectionTopicName, pRetryable)
                         )
                 )
 
         ).map(r -> new Object()); // TODO: check if there's not a more fancy way to comply with the returned type
     }
 
-    private Future<Object> sendFailure(K k, Tryable<P> pTryable) {
+    private Future<Object> sendFailure(K k, Retryable<P> pRetryable) {
         return fromJavaFuture(
                 responseProducer.send(
                         new ProducerRecord<>(
                                 requestTopicName,
                                 k,
-                                payloadSerializer.serialize(requestTopicName, pTryable)
+                                payloadSerializer.serialize(requestTopicName, pRetryable)
                         )
                 )
         ).map(r -> new Object()); // TODO: check if there's not a more fancy way to comply with the returned type
 
     }
 
-    private Future<Object> sendSuccess(K k, Tryable<P> pTryable, V v) {
+    private Future<Object> sendSuccess(K k, Retryable<P> pRetryable, V v) {
         return Future.reduce(
                 Arrays.asList(
                         fromJavaFuture(
@@ -112,7 +112,7 @@ public class KafkaSideEffectProcessor<K,P,V> {
                                         new ProducerRecord<>(
                                                 requestTopicName,
                                                 k,
-                                                payloadSerializer.serialize(requestTopicName, pTryable)
+                                                payloadSerializer.serialize(requestTopicName, pRetryable)
                                         )
                                 )
                         ),

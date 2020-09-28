@@ -3,8 +3,6 @@ package blep;
 import io.vavr.concurrent.Future;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.function.Predicate;
-
 
 @Slf4j
 public class SideEffectProcessor<K,P,V> {
@@ -15,20 +13,20 @@ public class SideEffectProcessor<K,P,V> {
     }
     @FunctionalInterface
     public interface AsyncRejector<K, P, R>{
-        Future<R> reject(K id, Tryable<P> rejected);
+        Future<R> reject(K id, Retryable<P> rejected);
     }
     @FunctionalInterface
     public interface AsyncFailureProcessor<K, P, R>{
-        Future<R> failed(K id, Tryable<P> failed);
+        Future<R> failed(K id, Retryable<P> failed);
     }
     @FunctionalInterface
     public interface AsyncSuccessProcessor<K, P, V, R>{
-        Future<R> success(K id, Tryable<P> success, V returnedValue);
+        Future<R> success(K id, Retryable<P> success, V returnedValue);
     }
 
     @FunctionalInterface
     public interface ReturnedValueChecker<K, P, V>{
-        boolean test(K id, Tryable<P> tryable, V returnedValue);
+        boolean test(K id, Retryable<P> retryable, V returnedValue);
     }
 
 
@@ -51,11 +49,11 @@ public class SideEffectProcessor<K,P,V> {
             return successProcessor.success(id, tryable, value);
         } ;
         this.failureProcessor = (id, failed) -> {
-            log.trace("Call for request {} Failed", id);
+            log.info("Call for request #{} Failed", id);
             return failureProcessor.failed(id, failed);
         };
         this.rejector = (id, tryable) -> {
-            log.trace("Notifying rejection for request #{}", id);
+            log.info("Notifying rejection for request #{}", id);
             return rejector.reject(id, tryable);
         };
         this.valueChecker = (id, triable, value) -> {
@@ -65,16 +63,19 @@ public class SideEffectProcessor<K,P,V> {
         };
     }
 
-    public Future<?> process(K id, Tryable<P> tryable) {
+    public Future<?> process(K id, Retryable<P> retryable) {
 
-        Tryable<P> tr1 = tryable.doTry();
+        Retryable<P> tr1 = retryable.doTry();
 
         return tr1.canTry() ?
-                payloadProcessor.process(tryable.getPayload())
-                    .flatMap(v->
+                payloadProcessor.process(retryable.getPayload())
+                        .onFailure(e -> {
+                            log.error("Exception raised while processing request", e);
+                            failureProcessor.failed(id, tr1);
+                        }).flatMap(v->
                         valueChecker.test(id,tr1,v) ?
                             successProcessor.success(id, tr1.success(), v):
-                            failureProcessor.failed(id,tr1.failed())
+                            failureProcessor.failed(id,tr1)
                     ):rejector.reject(id, tr1.failed());
     }
 
