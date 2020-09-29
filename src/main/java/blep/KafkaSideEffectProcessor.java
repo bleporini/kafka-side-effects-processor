@@ -41,7 +41,8 @@ public class KafkaSideEffectProcessor<K,P,V> {
             AsyncPayloadProcessor<P, V> asyncProcessor,
             String requestTopicName,
             String responseTopicName,
-            String rejectionTopicName) {
+            String rejectionTopicName,
+            RetryPolicy<P,V> retryPolicy) {
 
         this.requestConsumer = requestConsumer;
         this.responseProducer = responseProducer;
@@ -53,13 +54,13 @@ public class KafkaSideEffectProcessor<K,P,V> {
         this.responseTopicName = responseTopicName;
         this.rejectionTopicName = rejectionTopicName;
 
-        sideEffectProcessor = new SideEffectProcessor<K,P,V>(
+        sideEffectProcessor = new SideEffectProcessor<>(
                 asyncProcessor,
                 this::sendSuccess,
                 this::sendFailure,
                 this::sendReject,
-                valueChecker
-        );
+                valueChecker,
+                retryPolicy);
     }
 
     public void start() {

@@ -25,7 +25,11 @@ public abstract class SimpleHttpProcessor implements WithKafkaConfiguration{
     private final Properties conf = configuration();
     private final KafkaSideEffectProcessor<String, SimpleHttpRequest, HttpResponse<String>> processor;
 
-    public SimpleHttpProcessor(String requestTopicName, String responseTopicName, String rejectionTopicName) {
+    public SimpleHttpProcessor(
+            String requestTopicName,
+            String responseTopicName,
+            String rejectionTopicName,
+            RetryPolicy<SimpleHttpRequest, HttpResponse<String>> policy) {
 
         KafkaProducer<String, byte[]> producer = new KafkaProducer<>(conf, new StringSerializer(),new ByteArraySerializer());
 
@@ -51,7 +55,8 @@ public abstract class SimpleHttpProcessor implements WithKafkaConfiguration{
                 new HttpPayloadProcessor(),
                 requestTopicName,
                 responseTopicName,
-                rejectionTopicName
+                rejectionTopicName,
+                policy
         );
     }
 

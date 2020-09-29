@@ -25,8 +25,7 @@ public class SideEffectProcessorTest {
                 (k, t) -> {
                     throw new RuntimeException("should not happen");
                 },
-                (k,t,v) -> true
-        );
+                (k,t,v) -> true);
 
         processor.process(1l, Retryable.init("yes", 1))
                 .get();
@@ -50,8 +49,7 @@ public class SideEffectProcessorTest {
                 (k, t) -> {
                     throw new RuntimeException("should not happen");
                 },
-                (k,t,v) -> false
-        );
+                (k,t,v) -> false);
 
         processor.process(1l, Retryable.init("yes", 1))
                 .get();
@@ -76,8 +74,7 @@ public class SideEffectProcessorTest {
                     throw new RuntimeException("should not happen");
                 },
                 (k, t) -> Future.successful(rejectedNotified.getAndSet(true)),
-                (k,t,v) -> false
-        );
+                (k,t,v) -> false);
 
         processor.process(1L, Retryable.init("yes", 1).failed())
                 .get();
@@ -109,8 +106,7 @@ public class SideEffectProcessorTest {
                 (k, t) -> {
                     throw new RuntimeException("should not happen");
                 },
-                (k,t,v) -> false
-        );
+                (k,t,v) -> false);
 
         processor.process(1L, Retryable.init("yes", 1));
 

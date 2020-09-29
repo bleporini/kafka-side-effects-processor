@@ -5,10 +5,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 
 import static blep.Retryable.Status.*;
+import static java.lang.System.currentTimeMillis;
 
 @Getter
-public class Retryable<V> {
-
+public final class Retryable<V> {
 
     enum Status{
         TO_TRY, SUCCEEDED, FAILED
@@ -22,15 +22,23 @@ public class Retryable<V> {
 
     private final Status status;
 
+    private final long lastEvent;
+
     public Retryable(
             @JsonProperty("payload") V payload,
             @JsonProperty("max") Integer max,
             @JsonProperty("tries") Integer tries,
-            @JsonProperty("status") Status status) {
+            @JsonProperty("status") Status status,
+            @JsonProperty("lastEvent") long lastEvent) {
         this.payload = payload;
         this.max = max;
         this.tries = tries;
         this.status = status;
+        this.lastEvent = lastEvent;
+    }
+
+    public long elapsedMsSinceLastEvent() {
+        return currentTimeMillis() - lastEvent;
     }
 
     @JsonCreator
@@ -39,8 +47,8 @@ public class Retryable<V> {
                 payload,
                 max,
                 tries,
-                FAILED
-        );
+                FAILED,
+                currentTimeMillis());
     }
 
     public Retryable<V> doTry(){
@@ -50,8 +58,8 @@ public class Retryable<V> {
                 tries +1,
                 status==FAILED ?
                         FAILED :
-                        max > tries ? TO_TRY : FAILED
-        );
+                        max > tries ? TO_TRY : FAILED,
+                currentTimeMillis());
     }
 
     public Retryable<V> success(){
@@ -59,8 +67,8 @@ public class Retryable<V> {
                 payload,
                 max,
                 tries,
-                SUCCEEDED
-        );
+                SUCCEEDED,
+                currentTimeMillis());
     }
 
     public boolean canTry() {
@@ -68,10 +76,6 @@ public class Retryable<V> {
     }
 
     public static <V> Retryable<V> init(V payload, Integer max) {
-        return new Retryable<>(payload, max, 0, TO_TRY);
+        return new Retryable<>(payload, max, 0, TO_TRY, currentTimeMillis());
     }
-
-
-
-
 }

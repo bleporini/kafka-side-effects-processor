@@ -36,13 +36,15 @@ public class SideEffectProcessor<K,P,V> {
     private final AsyncFailureProcessor<K,P,?> failureProcessor;
     private final AsyncRejector<K,P,?> rejector;
     private final ReturnedValueChecker<K,P,V> valueChecker;
+    private final RetryPolicy<P, V> retryPolicy;
 
     public SideEffectProcessor(
             AsyncPayloadProcessor<P, V> payloadProcessor,
             AsyncSuccessProcessor<K, P, V, Object> successProcessor,
             AsyncFailureProcessor<K, P, Object> failureProcessor,
             AsyncRejector<K, P, Object> rejector,
-            ReturnedValueChecker<K,P,V> valueChecker) {
+            ReturnedValueChecker<K, P, V> valueChecker,
+            RetryPolicy<P, V> retryPolicy) {
         this.payloadProcessor = payloadProcessor;
         this.successProcessor = (id,tryable, value)->{
           log.trace("Notifying success for request #{}", id);
@@ -61,6 +63,22 @@ public class SideEffectProcessor<K,P,V> {
             log.trace("Verification for request #{}: {}", id, result ? "PASSED" : "FAILED");
             return result;
         };
+        this.retryPolicy = retryPolicy;
+    }
+    public SideEffectProcessor(
+            AsyncPayloadProcessor<P, V> payloadProcessor,
+            AsyncSuccessProcessor<K, P, V, Object> successProcessor,
+            AsyncFailureProcessor<K, P, Object> failureProcessor,
+            AsyncRejector<K, P, Object> rejector,
+            ReturnedValueChecker<K, P, V> valueChecker) {
+        this(
+                payloadProcessor,
+                successProcessor,
+                failureProcessor,
+                rejector,
+                valueChecker,
+                RetryPolicy.immediate()
+        );
     }
 
     public Future<?> process(K id, Retryable<P> retryable) {
@@ -68,7 +86,7 @@ public class SideEffectProcessor<K,P,V> {
         Retryable<P> tr1 = retryable.doTry();
 
         return tr1.canTry() ?
-                payloadProcessor.process(retryable.getPayload())
+                retryPolicy.evaluateAndProcess(payloadProcessor, tr1)
                         .onFailure(e -> {
                             log.error("Exception raised while processing request", e);
                             failureProcessor.failed(id, tr1);

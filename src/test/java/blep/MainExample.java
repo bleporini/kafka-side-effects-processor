@@ -77,7 +77,8 @@ public class MainExample implements WithLocalUnsecureKafka, WithRuntimeException
                 p -> Future.successful("OK " + p),
                 "requests",
                 "responses",
-                "rejections"
+                "rejections",
+                RetryPolicy.immediate()
         ).start();
 
     }

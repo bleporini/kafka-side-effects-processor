@@ -16,7 +16,7 @@ public class MainHttpExample extends SimpleHttpProcessor implements WithLocalUns
     private final Properties conf = configuration();
 
     public MainHttpExample(String requestTopicName, String responseTopicName, String rejectionTopicName) throws ExecutionException, InterruptedException {
-        super(requestTopicName, responseTopicName, rejectionTopicName);
+        super(requestTopicName, responseTopicName, rejectionTopicName, RetryPolicy.backoff(5000));
         KafkaProducer<String, byte[]> producer = new KafkaProducer<>(conf, new StringSerializer(),new ByteArraySerializer());
         producer.send(
                 new ProducerRecord<>(
@@ -30,7 +30,7 @@ public class MainHttpExample extends SimpleHttpProcessor implements WithLocalUns
                                                         .method(GET)
                                                         .url("https://www.google.fr/test")
                                                         .build(),
-                                                2
+                                                3
                                         )
                                 )
 //                        tryOnceSerializer.serialize("requests",Retryable.init("Test", 3))
