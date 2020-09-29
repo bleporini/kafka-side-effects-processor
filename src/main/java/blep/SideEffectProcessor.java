@@ -1,11 +1,25 @@
 package blep;
 
+import io.vavr.collection.List;
 import io.vavr.concurrent.Future;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.concurrent.*;
+import java.util.function.Supplier;
 
 
 @Slf4j
 public class SideEffectProcessor<K,P,V> {
+
+    static final ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(1);
+
+    public static final long DEFAULT_TIMEOUT_IN_MS = 30000;
+    private static final String TIMEOUT_LABEL = "Timeout";
+    private static final String NO_TIMEOUT_LABEL = "No timeout";
+
+    public static  <P,V> RetryPolicy<P,V> defaultRetryPolicy(){
+        return RetryPolicy.immediate();
+    }
 
     @FunctionalInterface
     public interface AsyncPayloadProcessor<P, V>{
@@ -31,12 +45,37 @@ public class SideEffectProcessor<K,P,V> {
 
 
     private final AsyncPayloadProcessor<P,V> payloadProcessor;
-
     private final AsyncSuccessProcessor<K,P,V,?> successProcessor;
     private final AsyncFailureProcessor<K,P,?> failureProcessor;
     private final AsyncRejector<K,P,?> rejector;
     private final ReturnedValueChecker<K,P,V> valueChecker;
     private final RetryPolicy<P, V> retryPolicy;
+
+    private AsyncPayloadProcessor<P, V> buildProcessorWithTimeout(
+            AsyncPayloadProcessor<P,V> payloadProcessor,
+            long timeout){
+        return p -> {
+            ScheduledFuture<String> schedule = scheduledExecutor.schedule(
+                    () -> TIMEOUT_LABEL,
+                    timeout,
+                    TimeUnit.MILLISECONDS
+            );
+            Future<String> eventualTimeout = Future.fromJavaFuture(schedule);
+            Future<V> eventualProcess = payloadProcessor.process(p);
+            Future<String> first = Future.firstCompletedOf(
+                    List.of(
+                            eventualTimeout,
+                            eventualProcess.map(c -> NO_TIMEOUT_LABEL)
+                    )
+            );
+            return first.flatMap(m ->
+                    TIMEOUT_LABEL.equals(m) ?
+                            Future.failed(new TimeoutException(TIMEOUT_LABEL)):
+                            eventualProcess
+            );
+        };
+    }
+
 
     public SideEffectProcessor(
             AsyncPayloadProcessor<P, V> payloadProcessor,
@@ -44,8 +83,9 @@ public class SideEffectProcessor<K,P,V> {
             AsyncFailureProcessor<K, P, Object> failureProcessor,
             AsyncRejector<K, P, Object> rejector,
             ReturnedValueChecker<K, P, V> valueChecker,
-            RetryPolicy<P, V> retryPolicy) {
-        this.payloadProcessor = payloadProcessor;
+            RetryPolicy<P, V> retryPolicy,
+            long timeoutInMs) {
+        this.payloadProcessor = buildProcessorWithTimeout(payloadProcessor, timeoutInMs);
         this.successProcessor = (id,tryable, value)->{
           log.trace("Notifying success for request #{}", id);
             return successProcessor.success(id, tryable, value);
@@ -64,6 +104,9 @@ public class SideEffectProcessor<K,P,V> {
             return result;
         };
         this.retryPolicy = retryPolicy;
+        log.info("SideEffectProcessor initilized with retry policy -{}- and timeout {}",
+                retryPolicy.getClass().getName(),
+                timeoutInMs);
     }
     public SideEffectProcessor(
             AsyncPayloadProcessor<P, V> payloadProcessor,
@@ -77,7 +120,8 @@ public class SideEffectProcessor<K,P,V> {
                 failureProcessor,
                 rejector,
                 valueChecker,
-                RetryPolicy.immediate()
+                defaultRetryPolicy(),
+                DEFAULT_TIMEOUT_IN_MS
         );
     }
 

@@ -29,7 +29,9 @@ public abstract class SimpleHttpProcessor implements WithKafkaConfiguration{
             String requestTopicName,
             String responseTopicName,
             String rejectionTopicName,
-            RetryPolicy<SimpleHttpRequest, HttpResponse<String>> policy) {
+            RetryPolicy<SimpleHttpRequest,
+            HttpResponse<String>> policy,
+            long timeoutInMs) {
 
         KafkaProducer<String, byte[]> producer = new KafkaProducer<>(conf, new StringSerializer(),new ByteArraySerializer());
 
@@ -56,7 +58,8 @@ public abstract class SimpleHttpProcessor implements WithKafkaConfiguration{
                 requestTopicName,
                 responseTopicName,
                 rejectionTopicName,
-                policy
+                policy,
+                timeoutInMs
         );
     }
 

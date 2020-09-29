@@ -5,9 +5,9 @@ import io.vavr.concurrent.Future;
 import io.vavr.concurrent.Promise;
 import lombok.AllArgsConstructor;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
+import static blep.SideEffectProcessor.scheduledExecutor;
 
 public interface RetryPolicy<P,V> {
 
@@ -33,7 +33,6 @@ public interface RetryPolicy<P,V> {
     }
 
     abstract class AbstractDelayedRetryPolicy <P, V> implements RetryPolicy<P, V>{
-        private static final ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
 
         @Override
         public Future<V> evaluateAndProcess(AsyncPayloadProcessor<P, V> processor, Retryable<P> retryable) {
@@ -41,7 +40,7 @@ public interface RetryPolicy<P,V> {
                 return processor.process(retryable.getPayload());
 
             Promise<V> promise = Promise.make();
-            executor.schedule(
+            scheduledExecutor.schedule(
                     () -> processor.process(retryable.getPayload())
                             .onFailure(promise::failure)
                             .forEach(promise::success),

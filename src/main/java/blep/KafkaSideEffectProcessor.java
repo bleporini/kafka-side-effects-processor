@@ -42,7 +42,8 @@ public class KafkaSideEffectProcessor<K,P,V> {
             String requestTopicName,
             String responseTopicName,
             String rejectionTopicName,
-            RetryPolicy<P,V> retryPolicy) {
+            RetryPolicy<P,V> retryPolicy,
+            long timeoutInMs) {
 
         this.requestConsumer = requestConsumer;
         this.responseProducer = responseProducer;
@@ -60,7 +61,8 @@ public class KafkaSideEffectProcessor<K,P,V> {
                 this::sendFailure,
                 this::sendReject,
                 valueChecker,
-                retryPolicy);
+                retryPolicy,
+                timeoutInMs);
     }
 
     public void start() {

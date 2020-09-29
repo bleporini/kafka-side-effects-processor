@@ -16,7 +16,7 @@ public class MainHttpExample extends SimpleHttpProcessor implements WithLocalUns
     private final Properties conf = configuration();
 
     public MainHttpExample(String requestTopicName, String responseTopicName, String rejectionTopicName) throws ExecutionException, InterruptedException {
-        super(requestTopicName, responseTopicName, rejectionTopicName, RetryPolicy.backoff(5000));
+        super(requestTopicName, responseTopicName, rejectionTopicName, RetryPolicy.backoff(5000), 1000);
         KafkaProducer<String, byte[]> producer = new KafkaProducer<>(conf, new StringSerializer(),new ByteArraySerializer());
         producer.send(
                 new ProducerRecord<>(

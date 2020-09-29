@@ -4,8 +4,11 @@ import io.vavr.concurrent.Future;
 import io.vavr.concurrent.Promise;
 import org.junit.Test;
 
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static blep.SideEffectProcessor.scheduledExecutor;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class SideEffectProcessorTest {
@@ -110,7 +113,49 @@ public class SideEffectProcessorTest {
 
         processor.process(1L, Retryable.init("yes", 1));
 
-        promise.future().await(); //Otherwise the test may end before the flag has been set.
+        promise.future().await(10, SECONDS); //Otherwise the test may end before the flag has been set.
+
+        assertThat(
+                failureNotified
+        ).isTrue();
+
+    }
+
+    @Test
+    public void sould_trig_timeout() {
+        AtomicBoolean failureNotified = new AtomicBoolean(false);
+        Promise<Object> promise = Promise.make();
+
+        SideEffectProcessor<Long, String, Integer> processor = new SideEffectProcessor<>(
+                s -> Future.fromJavaFuture(
+                        scheduledExecutor.schedule(
+                                () -> 1,
+                                20000,
+                                TimeUnit.MILLISECONDS
+                        )
+                ),
+                (id, success, returnedValue) -> {
+                    throw new RuntimeException("should not happen");
+                },
+                (k, t) -> {
+                    Future<Object> future = Future.successful(failureNotified.getAndSet(true));
+                    future.await();
+                    promise.success("ok");
+                    return future;
+                },
+                (k, t) -> {
+                    throw new RuntimeException("should not happen");
+                },
+                (k,t,v) -> {
+                    throw new RuntimeException("should not happen");
+                },
+                RetryPolicy.immediate(),
+                100
+        );
+
+        processor.process(1L, Retryable.init("yes", 1));
+
+        promise.future().await(10, SECONDS); //Otherwise the test may end before the flag has been set.
 
         assertThat(
                 failureNotified

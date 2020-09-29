@@ -11,7 +11,10 @@ import org.apache.kafka.common.serialization.*;
 
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static blep.SideEffectProcessor.scheduledExecutor;
 
 public class MainExample implements WithLocalUnsecureKafka, WithRuntimeExceptionWrapper {
 
@@ -74,11 +77,18 @@ public class MainExample implements WithLocalUnsecureKafka, WithRuntimeException
                 tryOnceSerializer,
                 new StringSerializer(),
                 (id, triable, v) -> willSucceed.getAndSet(! willSucceed.get()),
-                p -> Future.successful("OK " + p),
+                p -> Future.fromJavaFuture(
+                        scheduledExecutor.schedule(
+                                () -> "OK " + p,
+                                20000,
+                                TimeUnit.MILLISECONDS
+                        )
+                ),
                 "requests",
                 "responses",
                 "rejections",
-                RetryPolicy.immediate()
+                RetryPolicy.immediate(),
+                1000
         ).start();
 
     }
